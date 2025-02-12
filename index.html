@@ -1,0 +1,156 @@
+<!-- esriConfig.apiKey = "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H"; -->
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Robo</title>
+
+  <script type="module" src="https://js.arcgis.com/calcite-components/2.10.1/calcite.esm.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/2.10.1/calcite.css" />
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4="
+    crossorigin="anonymous"></script>
+  <script src="https://js.arcgis.com/4.30"></script>
+</head>
+
+<body>
+
+  <div id="titleDiv" class="esri-widget">
+    <div id="title">ROBO App</div>
+  </div>
+  <div id="displayMap"></div>
+
+  <div id="inputContainer">
+    <section>
+      <!-- HTML elements to display remaining distance and time -->
+      <div id="remainingDistance"></div>
+      <div id="remainingTime"></div>
+    </section>
+
+    <section>
+      <label for="searchWidgetContainer">Starting Location/Address</label>
+      <div id="searchWidgetContainer"></div>
+    </section>
+    <section>
+      <label for="timePickerstart">Choose your starting date & time</label>
+      <!-- <calcite-input-time-picker disabled id="timePickerstart"></calcite-input-time-picker> -->
+      <calcite-input disabled id="timePickerstart" placeholder="Enter your region" type="time"
+        prefix-text="Pick your time"></calcite-input>
+      <calcite-input-date-picker disabled id="datePickerstart"></calcite-input-date-picker>
+    </section>
+    <section>
+      <label for="searchWidgetContainer2">Arriving Location/Address</label>
+      <div id="searchWidgetContainer2"></div>
+    </section>
+    <section>
+      <label for="timePickerend">Choose your arriving date & time</label>
+      <!-- <calcite-input-time-picker disabled id="timePickerend"></calcite-input-time-picker> -->
+      <calcite-input disabled id="timePickerend" placeholder="Enter your region" type="time"
+        prefix-text="Pick your time"></calcite-input>
+      <calcite-input-date-picker disabled id="datePickerend"></calcite-input-date-picker>
+    </section>
+    <section>
+      <label for="tripAmount">Enter trip amount</label>
+      <calcite-input id="tripAmount" placeholder="Enter trip amount"></calcite-input>
+    </section>
+
+    <calcite-button disabled id="startTripButton" appearance="solid">Start trip</calcite-button>
+    <calcite-button disabled id="generateReportButton" appearance="solid">View trip info</calcite-button>
+    <calcite-button disabled id="endTripButton" appearance="solid">End trip</calcite-button>
+  </div>
+
+  <div id="reportContainer" class="hidden">
+    <section>
+      <div id="reportContent">
+        <!-- Report content will be dynamically filled here -->
+      </div>
+      <div id="reportActions">
+        <calcite-button id="viewInvoiceButton" appearance="solid">View invoice</calcite-button>
+        <calcite-button id="startNewTripButton" appearance="solid">Start new trip</calcite-button>
+        <calcite-button id="exitReportButton" appearance="solid">Exit</calcite-button>
+      </div>
+    </section>
+  </div>
+
+  <script language="javascript">
+    function book(pickup_address,
+      drop_off_address,
+      total_fare,
+      distance_in_km,
+      totaltime) {
+
+      alert(pickup_address + ', ' + drop_off_address + ', ' + total_fare + ', ' + distance_in_km + ', ' + totaltime);
+      
+      if ($("#taxi_id").val() == '') {
+        alert("Taxi is a required field");
+        return false;
+      }
+
+      if ($("#trip_date").val() == '') {
+        alert("Trip date is a required field");
+        return false;
+      }
+
+      if ($("#trip_time").val() == '') {
+        alert("Trip time is a required field");
+        return false;
+      }
+      if ($("#first_name").val() == '') {
+        alert("First name is a required field");
+        return false;
+      }
+
+      if ($("#last_name").val() == '') {
+        alert("Last name is a required field");
+        return false;
+      }
+
+      if ($("#phone").val() == '') {
+        alert("Phone is a required field");
+        return false;
+      }
+      if ($("#email").val() == '') {
+        alert("Email is a required field");
+        return false;
+      }
+
+      cost_per_km = $("#taxi_id").find("option:selected").attr('data-cost_per_km');
+
+      total_fare = parseFloat(cost_per_km) * parseFloat(distance_in_km);
+      $.ajax({
+        url: "https://bellerue.be/index.php/homecontroller/book",
+        type: "POST",
+        data: {
+          taxi_id: $("#taxi_id").val(),
+          number_of_passengers: $("#number_of_passengers").val(),
+          trip_date: $("#trip_date").val(),
+          trip_time: $("#trip_time").val(),
+          first_name: $("#first_name").val(),
+          last_name: $("#last_name").val(),
+          phone: $("#phone").val(),
+          email: $("#email").val(),
+          pickup_address: pickup_address,
+          drop_off_address: drop_off_address,
+          total_fare: total_fare,
+          distance_in_km: distance_in_km,
+          totaltime: totaltime
+        },
+        success: function (data) {
+          console.log(data);
+          obj = JSON.parse(data);
+          console.log(obj);
+          if (obj.status == 'success') {
+            //alert(obj.msg);
+            alert("Thank you for booking with CABNOTE .Your booking has been completed successfully. An email has been sent with booking details to your customer email.");
+          }
+        }
+      })
+    }
+  </script>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
