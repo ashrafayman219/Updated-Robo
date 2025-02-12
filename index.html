@@ -22,7 +22,12 @@
   </div>
   <div id="displayMap"></div>
 
+  <!-- Button to show the inputContainer when hidden -->
+  <calcite-button round id="showInputButton" appearance="solid" icon-start="2d-explore" scale="m"></calcite-button>
+
   <div id="inputContainer">
+    <calcite-button round id="toggleInputButton" appearance="transparent" icon-start="x" scale="l"></calcite-button>
+
     <section>
       <!-- HTML elements to display remaining distance and time -->
       <div id="remainingDistance"></div>
@@ -150,6 +155,27 @@
     }
   </script>
 
+  <script>
+document.addEventListener("DOMContentLoaded", function () {
+  const toggleButton = document.getElementById("toggleInputButton");
+  const inputContainer = document.getElementById("inputContainer");
+  const showButton = document.getElementById("showInputButton");
+
+  toggleButton.addEventListener("click", function () {
+    inputContainer.classList.add("hidden01");
+    showButton.classList.add("visible", "pulsing");
+    // setTimeout(() => {
+    // }, 400); // Delay to match animation duration
+  });
+
+  showButton.addEventListener("click", function () {
+    inputContainer.classList.remove("hidden01");
+    showButton.classList.remove("visible", "pulsing");
+  });
+});
+
+
+  </script>
   <script src="script.js"></script>
 </body>
 

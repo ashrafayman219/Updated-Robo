@@ -5,6 +5,78 @@ html, body, #displayMap {
   width: 100%;
 }
 
+.hidden01 {
+  display: none !important;
+}
+
+#toggleInputButton {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 3;
+}
+
+/* Show Input Button (Initially Hidden) */
+#showInputButton {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 3;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease-in, transform 0.3s ease-in-out;
+  transform: scale(0.8);
+}
+
+/* Show with bounce effect */
+#showInputButton.visible {
+  display: block;
+  opacity: 1;
+  transform: scale(1);
+  animation: bounceIn 0.5s ease-out;
+}
+
+/* Hide input container with shrink & fade effect */
+#inputContainer.hidden01 {
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+  pointer-events: none;
+}
+
+
+/* Floating Pulse Effect */
+@keyframes floatPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.9;
+  }
+}
+
+#showInputButton.pulsing {
+  animation: floatPulse 1.5s infinite ease-in-out;
+}
+
+/* Bounce In Effect */
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+
+
 #titleDiv {
   position: absolute;
   height: 55px;
@@ -33,6 +105,11 @@ html, body, #displayMap {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  border-radius: 12px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+  transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+  opacity: 1;
+  transform: scale(1) translateY(0);
 }
 
 @media (min-width: 768px) {

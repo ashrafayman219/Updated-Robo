@@ -10,10 +10,8 @@ let endTime;
 let endDate;
 let amount;
 
-
 let routeGeometry;
-let totalDistance;
-let totalTime;
+let directions;
 
 
 
@@ -51,7 +49,9 @@ async function initializeRoboApp() {
       FeatureSet,
       Track,
       geometryEngine,
-      Point
+      Point,
+      Polyline,
+      networkService
     ] = await Promise.all([
       loadModule("esri/config"),
       loadModule("esri/Map"),
@@ -71,6 +71,8 @@ async function initializeRoboApp() {
       loadModule("esri/widgets/Track"),
       loadModule("esri/geometry/geometryEngine"),
       loadModule("esri/geometry/Point"),
+      loadModule("esri/geometry/Polyline"),
+      loadModule("esri/rest/networkService"),
     ]);
 
     // esriConfig.apiKey =
@@ -78,7 +80,7 @@ async function initializeRoboApp() {
 
     esriConfig.apiKey =
       "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H";
-      
+    let apiKey = "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H";
 
     const routeUrl =
       "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World";
@@ -92,7 +94,12 @@ async function initializeRoboApp() {
         // autocasts as new SpatialReference()
         wkid: 3857,
       },
+      // travelMode: "Driving Time"
     });
+
+    // Obtain the routing service's description. The description contains all preset travel modes.
+    const serviceDescription = await networkService.fetchServiceDescription(routeUrl, apiKey);
+    console.log(serviceDescription, "serviceDescription");
 
     const stopSymbol = {
       type: "simple-marker", // autocasts as new SimpleMarkerSymbol()
@@ -125,6 +132,7 @@ async function initializeRoboApp() {
 
     displayMap = new Map({
       basemap: "arcgis-light-gray", //Basemap styles service
+      // basemap: "arcgis/navigation", //Basemap styles service
       layers: [routeLayer],
     });
 
@@ -226,7 +234,7 @@ async function initializeRoboApp() {
         routeParams.stops.features.push(stop11);
         routeParams.stops.features.push(stop12);
         // routeParams.outSpatialReference = { wkid: 3857 };
-
+        routeParams.returnDirections = true;
 
 
         // if (routeParams.stops.features.length >= 2) {
@@ -247,10 +255,9 @@ async function initializeRoboApp() {
             const data = await route.solve(routeUrl, routeParams);
             tripData = data;
 
-            routeGeometry = tripData.routeResults[0].route.geometry;
-            totalDistance = tripData.routeResults[0].route.attributes.Total_Kilometers;
-            totalTime = tripData.routeResults[0].route.attributes.Total_TravelTime;
-
+            // Assuming you have a routeResult from the route.solve() method
+            routeGeometry = data.routeResults[0].route.geometry;
+            directions = tripData.routeResults[0].directions;
 
             const routeResult = data.routeResults[0].route;
             routeResult.symbol = routeSymbol;
@@ -264,15 +271,6 @@ async function initializeRoboApp() {
     }
 
 
-    // Function to calculate remaining distance and time
-    function calculateRemainingDistanceAndTime(currentPosition) {
-      const closestPoint = geometryEngine.nearestCoordinate(routeGeometry, currentPosition);
-      const distanceAlongRoute = geometryEngine.length(geometryEngine.cut(routeGeometry, closestPoint.coordinate)[0]);
-      const remainingDistance = totalDistance - distanceAlongRoute;
-      const remainingTime = (remainingDistance / totalDistance) * totalTime;
-
-      return { remainingDistance, remainingTime };
-    }
 
 
     let trackWidget = new Track({
@@ -281,17 +279,49 @@ async function initializeRoboApp() {
     
     view.ui.add(trackWidget, "top-left");
 
-    // Track the driver's position and update remaining distance and time
-    trackWidget.on("track", ({ position }) => {
-      const { longitude, latitude } = position.coords;
-      const currentPosition = new Point({ longitude, latitude });
 
-      const { remainingDistance, remainingTime } = calculateRemainingDistanceAndTime(currentPosition);
+// Conversion factor from miles to kilometers
+const MILES_TO_KILOMETERS = 1.60934;
 
-      // Update the UI with the remaining distance and time
-      document.getElementById('remainingDistance').innerText = `Remaining Distance: ${remainingDistance.toFixed(2)} km`;
-      document.getElementById('remainingTime').innerText = `Remaining Time: ${remainingTime.toFixed(2)} minutes`;
-    });
+// Track the driver's position
+trackWidget.on("track", ({ position }) => {
+  const { longitude, latitude } = position.coords;
+  const currentPosition = new Point({ longitude, latitude, spatialReference: { wkid: 3857 } });
+
+  // Find the closest direction segment to the current position
+  let closestSegmentIndex = -1;
+  let minDistance = Infinity;
+
+  directions.features.forEach((direction, index) => {
+    const segmentGeometry = direction.geometry;
+    const distance = geometryEngine.distance(currentPosition, segmentGeometry, "kilometers");
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestSegmentIndex = index;
+    }
+  });
+
+  if (closestSegmentIndex !== -1) {
+    // Calculate remaining distance and time from the closest segment to the end
+    let remainingDistance = 0;
+    let remainingTime = 0;
+
+    for (let i = closestSegmentIndex; i < directions.features.length; i++) {
+      const direction = directions.features[i];
+      // Convert distance from miles to kilometers
+      remainingDistance += direction.attributes.length * MILES_TO_KILOMETERS;
+      remainingTime += direction.attributes.time;
+    }
+
+    // Update UI
+    document.getElementById("remainingDistance").innerText = `Remaining Distance: ${remainingDistance.toFixed(2)} km`;
+    document.getElementById("remainingTime").innerText = `Remaining Time: ${remainingTime.toFixed(2)} minutes`;
+  } else {
+    // Handle case where no valid segment is found
+    document.getElementById("remainingDistance").innerText = `Remaining Distance: 0 km`;
+    document.getElementById("remainingTime").innerText = `Remaining Time: 0 minutes`;
+  }
+});
 
 
 
