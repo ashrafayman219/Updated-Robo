@@ -51,7 +51,9 @@ async function initializeRoboApp() {
       geometryEngine,
       Point,
       Polyline,
-      networkService
+      networkService,
+      SceneView,
+      WebStyleSymbol
     ] = await Promise.all([
       loadModule("esri/config"),
       loadModule("esri/Map"),
@@ -73,6 +75,8 @@ async function initializeRoboApp() {
       loadModule("esri/geometry/Point"),
       loadModule("esri/geometry/Polyline"),
       loadModule("esri/rest/networkService"),
+      loadModule("esri/views/SceneView"),
+      loadModule("esri/symbols/WebStyleSymbol"),
     ]);
 
     // esriConfig.apiKey =
@@ -97,9 +101,6 @@ async function initializeRoboApp() {
       // travelMode: "Driving Time"
     });
 
-    // Obtain the routing service's description. The description contains all preset travel modes.
-    const serviceDescription = await networkService.fetchServiceDescription(routeUrl, apiKey);
-    console.log(serviceDescription, "serviceDescription");
 
     const stopSymbol = {
       type: "simple-marker", // autocasts as new SimpleMarkerSymbol()
@@ -131,12 +132,12 @@ async function initializeRoboApp() {
     );
 
     displayMap = new Map({
-      basemap: "arcgis-light-gray", //Basemap styles service
+      basemap: "streets-dark-3d", //Basemap styles service
       // basemap: "arcgis/navigation", //Basemap styles service
       layers: [routeLayer],
     });
 
-    view = new MapView({
+    view = new SceneView({
       container: "displayMap",
       map: displayMap,
       center: [4.46, 50.50],
@@ -280,10 +281,19 @@ async function initializeRoboApp() {
       height: "80px"
     };
 
+
+
+
+
+    const webStyleSymbol = new WebStyleSymbol({
+      name: "Tesla_P7",
+      styleName: "EsriRealisticTransportationStyle"
+    });
+
     let trackWidget = new Track({
       view: view,
       graphic: new Graphic({
-        symbol: taxiSymbol // or taxiSymbolFont if using font icon
+        symbol: webStyleSymbol // or taxiSymbolFont if using font icon
       }),
       goToLocationEnabled: true,
       rotationEnabled: true
@@ -565,19 +575,19 @@ async function addWidgets() {
     // view.ui.add(toggle, "top-left");
 
 
-    // Add this after creating your view
-    const compass = new Compass({
-      view: view
-    });
-    // Add the widgets to the view
-    view.ui.add(compass, "top-left");
+    // // Add this after creating your view
+    // const compass = new Compass({
+    //   view: view
+    // });
+    // // Add the widgets to the view
+    // view.ui.add(compass, "top-left");
 
-    // creates a new instance of the NavigationToggle widget
-    let navigationToggle = new NavigationToggle({
-      view: view
-    });
-    // and adds it to the top right of the view
-    view.ui.add(navigationToggle, "top-left");
+    // // creates a new instance of the NavigationToggle widget
+    // let navigationToggle = new NavigationToggle({
+    //   view: view
+    // });
+    // // and adds it to the top right of the view
+    // view.ui.add(navigationToggle, "top-left");
 
 
     await view.when();
