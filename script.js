@@ -10,10 +10,20 @@ let endTime;
 let endDate;
 let amount;
 
+
+
+let trackWidget;
 let routeGeometry;
 let directions;
 
+// Add these variables at the top of your script
+let isRoutingInProgress = false;
+let currentRoute = null;
 
+// Add these variables at the top
+let isTracking = false;
+let lastKnownPosition = null;
+let trackingInterval = null;
 
 function loadModule(moduleName) {
   return new Promise((resolve, reject) => {
@@ -28,6 +38,211 @@ function loadModule(moduleName) {
     });
   });
 }
+
+
+// Navigation handling functions
+function openNavigation(lat, lon, app = 'waze') {
+    const navigationUrls = {
+        waze: {
+            mobile: `waze://?ll=${lat},${lon}&navigate=yes`,
+            desktop: `https://www.waze.com/ul?ll=${lat},${lon}&navigate=yes`
+        },
+        googleMaps: {
+            mobile: `comgooglemaps://?daddr=${lat},${lon}&directionsmode=driving`,
+            desktop: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
+        }
+    };
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const url = isMobile ? navigationUrls[app].mobile : navigationUrls[app].desktop;
+
+    // For mobile devices, try to open the app first
+    if (isMobile) {
+        // Try to open the app
+        window.location.href = url;
+        
+        // Fallback to browser version after a short delay if app doesn't open
+        setTimeout(() => {
+            window.location.href = navigationUrls[app].desktop;
+        }, 1000);
+    } else {
+        window.open(url, '_blank');
+    }
+}
+
+function showNavigationModal(lat, lon) {
+    try {
+        const modal = document.getElementById('wazeModal');
+        if (!modal) {
+            console.error('Navigation modal not found');
+            return;
+        }
+
+        // Set up event listeners with error handling
+        const wazeBtn = document.getElementById('openWazeBtn');
+        const googleBtn = document.getElementById('openGoogleMapsBtn');
+        const cancelBtn = document.getElementById('cancelNavBtn');
+
+        if (wazeBtn) {
+            wazeBtn.onclick = () => {
+                try {
+                    openNavigation(lat, lon, 'waze');
+                    modal.open = false;
+                } catch (error) {
+                    console.error('Error opening Waze:', error);
+                }
+            };
+        }
+
+        if (googleBtn) {
+            googleBtn.onclick = () => {
+                try {
+                    openNavigation(lat, lon, 'googleMaps');
+                    modal.open = false;
+                } catch (error) {
+                    console.error('Error opening Google Maps:', error);
+                }
+            };
+        }
+
+        if (cancelBtn) {
+            cancelBtn.onclick = () => {
+                modal.open = false;
+            };
+        }
+
+        modal.open = true;
+    } catch (error) {
+        console.error('Error showing navigation modal:', error);
+        alert('Unable to open navigation options. Please try again.');
+    }
+}
+// Add this function to handle navigation from report view
+function handleNavigationFromReport(app = 'waze') {
+    if (!endingAddressName || !endingAddressName.feature) {
+        console.error('No valid destination coordinates available');
+        return;
+    }
+
+    const lat = endingAddressName.feature.geometry.latitude;
+    const lon = endingAddressName.feature.geometry.longitude;
+    openNavigation(lat, lon, app);
+}
+
+
+
+// Enhanced tracking function
+function enhanceTracking() {
+    if (!trackWidget) return;
+
+    // Configure track widget
+    trackWidget.goToLocationEnabled = true;
+    trackWidget.scale = 1500; // Adjust zoom level when tracking
+    trackWidget.rotationEnabled = true;
+
+    trackWidget.on("track", ({ position }) => {
+        if (!position) return;
+
+        const { longitude, latitude } = position.coords;
+        lastKnownPosition = { longitude, latitude };
+
+        if (!isTracking) return;
+
+        // Update tracking information
+        updateTrackingInfo(position);
+    });
+
+    // Track start/stop handling
+    trackWidget.on("track-start", () => {
+        isTracking = true;
+        startContinuousTracking();
+    });
+
+    trackWidget.on("track-stop", () => {
+        isTracking = false;
+        stopContinuousTracking();
+    });
+}
+
+function startContinuousTracking() {
+    if (trackingInterval) return;
+
+    trackingInterval = setInterval(() => {
+        if (!lastKnownPosition || !routeGeometry) return;
+
+        const currentPoint = new Point({
+            longitude: lastKnownPosition.longitude,
+            latitude: lastKnownPosition.latitude,
+            spatialReference: view.spatialReference
+        });
+
+        // Calculate remaining distance and time
+        const remainingPath = calculateRemainingPath(currentPoint, routeGeometry);
+        updateRemainingInfo(remainingPath);
+    }, 5000); // Update every 5 seconds
+}
+
+function stopContinuousTracking() {
+    if (trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+    }
+}
+
+function calculateRemainingPath(currentPoint, routePath) {
+    if (!geometryEngine) return null;
+
+    try {
+        const nearestVertex = geometryEngine.nearestVertex(routePath, currentPoint);
+        if (!nearestVertex) return null;
+
+        // Get the remaining portion of the route
+        const remainingGeometry = geometryEngine.cut(routePath, nearestVertex.coordinate)[1];
+        if (!remainingGeometry) return null;
+
+        return {
+            distance: geometryEngine.geodesicLength(remainingGeometry, "kilometers"),
+            geometry: remainingGeometry
+        };
+    } catch (error) {
+        console.error("Error calculating remaining path:", error);
+        return null;
+    }
+}
+
+function updateRemainingInfo(remainingPath) {
+    if (!remainingPath) return;
+
+    const remainingDistanceElement = document.getElementById("remainingDistance");
+    const remainingTimeElement = document.getElementById("remainingTime");
+
+    if (remainingDistanceElement) {
+        remainingDistanceElement.textContent = 
+            `Remaining Distance: ${remainingPath.distance.toFixed(2)} km`;
+    }
+
+    if (remainingTimeElement) {
+        // Estimate time based on average speed (e.g., 50 km/h)
+        const estimatedTimeHours = remainingPath.distance / 50;
+        const estimatedMinutes = Math.round(estimatedTimeHours * 60);
+        remainingTimeElement.textContent = 
+            `Estimated Time: ${estimatedMinutes} minutes`;
+    }
+}
+
+// Add this function to better handle tracking state
+function resetTracking() {
+    isTracking = false;
+    stopContinuousTracking();
+    if (trackWidget) {
+        trackWidget.stop();
+    }
+    document.getElementById("remainingDistance").textContent = "";
+    document.getElementById("remainingTime").textContent = "";
+}
+
+
+
 
 async function initializeRoboApp() {
   try {
@@ -185,6 +400,22 @@ async function initializeRoboApp() {
     searchWidget2.on("select-result", function (event) {
       console.log("The selected search result222222222: ", event.result);
       endingAddressName = event.result;
+
+      // Enable Waze button
+      document.getElementById("openWazeButton").disabled = false;
+
+      // Update your report actions event listeners
+      document.getElementById('openWazeButton').addEventListener('click', () => {
+          handleNavigationFromReport('waze');
+      });
+
+      // If you have a Google Maps button in your report view
+      document.getElementById('openGoogleMapsButton')?.addEventListener('click', () => {
+          handleNavigationFromReport('googleMaps');
+      });
+
+
+
       document.getElementById("startTripButton").disabled = false;
       document.getElementById("timePickerend").disabled = false;
       document.getElementById("datePickerend").disabled = false;
@@ -213,62 +444,148 @@ async function initializeRoboApp() {
     });
 
     async function startTrip(startingAddressName, endingAddressName) {
-      console.log("Starting trip from:", startingAddressName, "to:", endingAddressName);
-      // Add logic for starting the trip using the ArcGIS Directions or other related services
+      // console.log("Starting trip from:", startingAddressName, "to:", endingAddressName);
+      // // Add logic for starting the trip using the ArcGIS Directions or other related services
 
-      if (startingAddressName && endingAddressName) {
-        console.log("endingAddressName: ", endingAddressName);
-
-        const stop11 = new Graphic({
-          geometry: startingAddressName.feature.geometry,
-          symbol: stopSymbol,
-        });
-
-        const stop12 = new Graphic({
-          geometry: endingAddressName.feature.geometry,
-          symbol: stopSymbol,
-        });
-        routeLayer.add(stop11);
-        routeLayer.add(stop12);
-
-        // Execute the route if 2 or more stops are input
-        routeParams.stops.features.push(stop11);
-        routeParams.stops.features.push(stop12);
-        // routeParams.outSpatialReference = { wkid: 3857 };
-        routeParams.returnDirections = true;
-
-
-        // if (routeParams.stops.features.length >= 2) {
-        //   route.solve(routeUrl, routeParams).then(showRoute);
-        // }
-
-        // function showRoute(data) {
-        //   console.log(data, "data");
-        //   reportroutingdata = data;
-        //   const routeResult = data.routeResults[0].route;
-        //   routeResult.symbol = routeSymbol;
-        //   routeLayer.add(routeResult);
-          
-        // }
-
-        if (routeParams.stops.features.length >= 2) {
-          try {
-            const data = await route.solve(routeUrl, routeParams);
-            tripData = data;
-
-            // Assuming you have a routeResult from the route.solve() method
-            routeGeometry = data.routeResults[0].route.geometry;
-            directions = tripData.routeResults[0].directions;
-
-            const routeResult = data.routeResults[0].route;
-            routeResult.symbol = routeSymbol;
-            routeLayer.add(routeResult);
-            return data; // Return the routing data
-          } catch (error) {
-            console.error("Error solving route:", error);
-          }
-        }
+      // Prevent multiple clicks
+      if (isRoutingInProgress) {
+          return;
       }
+
+
+          try {
+        isRoutingInProgress = true;
+        document.getElementById("startTripButton").disabled = true;
+
+        // Clear existing route if any
+        if (currentRoute) {
+            routeLayer.removeAll();
+            routeParams.stops.features = [];
+        }
+
+        if (startingAddressName && endingAddressName) {
+            const stop11 = new Graphic({
+                geometry: startingAddressName.feature.geometry,
+                symbol: stopSymbol,
+            });
+
+            const stop12 = new Graphic({
+                geometry: endingAddressName.feature.geometry,
+                symbol: stopSymbol,
+            });
+
+            routeLayer.add(stop11);
+            routeLayer.add(stop12);
+
+            routeParams.stops.features.push(stop11);
+            routeParams.stops.features.push(stop12);
+            routeParams.returnDirections = true;
+
+            if (routeParams.stops.features.length >= 2) {
+                try {
+                    const data = await route.solve(routeUrl, routeParams);
+                    tripData = data;
+
+                    routeGeometry = data.routeResults[0].route.geometry;
+                    directions = tripData.routeResults[0].directions;
+
+                    const routeResult = data.routeResults[0].route;
+                    routeResult.symbol = routeSymbol;
+                    routeLayer.add(routeResult);
+                    currentRoute = routeResult;
+
+                    // Show navigation modal
+                    if (endingAddressName && endingAddressName.feature) {
+                        const lat = endingAddressName.feature.geometry.latitude;
+                        const lon = endingAddressName.feature.geometry.longitude;
+                        showNavigationModal(lat, lon);
+                    }
+
+                    // Enable other relevant buttons
+                    document.getElementById("generateReportButton").disabled = false;
+                    document.getElementById("endTripButton").disabled = false;
+
+                    return data;
+                } catch (error) {
+                    console.error("Error solving route:", error);
+                    alert("Error calculating route. Please try again.");
+                }
+            }
+        }
+    } finally {
+        isRoutingInProgress = false;
+    }
+
+
+
+      // if (startingAddressName && endingAddressName) {
+      //   console.log("endingAddressName: ", endingAddressName);
+
+      //   const stop11 = new Graphic({
+      //     geometry: startingAddressName.feature.geometry,
+      //     symbol: stopSymbol,
+      //   });
+
+      //   const stop12 = new Graphic({
+      //     geometry: endingAddressName.feature.geometry,
+      //     symbol: stopSymbol,
+      //   });
+      //   routeLayer.add(stop11);
+      //   routeLayer.add(stop12);
+
+      //   // Execute the route if 2 or more stops are input
+      //   routeParams.stops.features.push(stop11);
+      //   routeParams.stops.features.push(stop12);
+      //   // routeParams.outSpatialReference = { wkid: 3857 };
+      //   routeParams.returnDirections = true;
+
+
+      //   // if (routeParams.stops.features.length >= 2) {
+      //   //   route.solve(routeUrl, routeParams).then(showRoute);
+      //   // }
+
+      //   // function showRoute(data) {
+      //   //   console.log(data, "data");
+      //   //   reportroutingdata = data;
+      //   //   const routeResult = data.routeResults[0].route;
+      //   //   routeResult.symbol = routeSymbol;
+      //   //   routeLayer.add(routeResult);
+          
+      //   // }
+
+      //   if (routeParams.stops.features.length >= 2) {
+      //     try {
+      //       const data = await route.solve(routeUrl, routeParams);
+      //       tripData = data;
+
+      //       // Assuming you have a routeResult from the route.solve() method
+      //       routeGeometry = data.routeResults[0].route.geometry;
+      //       directions = tripData.routeResults[0].directions;
+
+      //       const routeResult = data.routeResults[0].route;
+      //       routeResult.symbol = routeSymbol;
+      //       routeLayer.add(routeResult);
+
+
+      //           // Show navigation modal after route is calculated
+      //           if (endingAddressName && endingAddressName.feature) {
+      //               const lat = endingAddressName.feature.geometry.latitude;
+      //               const lon = endingAddressName.feature.geometry.longitude;
+                    
+      //               // Use the new modal instead of confirm
+      //               showNavigationModal(lat, lon);
+      //           }
+
+      //       return data; // Return the routing data
+      //     } catch (error) {
+      //       console.error("Error solving route:", error);
+      //     }
+      //   }
+
+
+
+
+      // }
     }
 
 
@@ -290,7 +607,7 @@ async function initializeRoboApp() {
       styleName: "EsriRealisticTransportationStyle"
     });
 
-    let trackWidget = new Track({
+    trackWidget = new Track({
       view: view,
       graphic: new Graphic({
         symbol: webStyleSymbol // or taxiSymbolFont if using font icon
@@ -300,7 +617,8 @@ async function initializeRoboApp() {
     });
     view.ui.add(trackWidget, "top-left");
 
-
+    // Call this after initializing trackWidget
+    enhanceTracking();
 
     // Conversion factor from miles to kilometers
     const MILES_TO_KILOMETERS = 1.60934;
@@ -406,34 +724,63 @@ async function initializeRoboApp() {
     });
 
     function endtripBookFunction(tripData) {
-      pickupadd = startingAddressName.name;
-      dropoffadd = endingAddressName.name;
-      dist = tripData.routeResults[0].route.attributes.Total_Kilometers.toFixed(2);
-      time = tripData.routeResults[0].route.attributes.Total_TravelTime.toFixed(2);
-      book(pickupadd , 
-        dropoffadd , 
-        amount , 
-        dist , 
-        time);
-      view.graphics.removeAll();
-      routeLayer.graphics.removeAll();
-      view.goTo({
-        target: view.center,
-        zoom: 2
-      });
-      searchWidget.clear();
-      searchWidget2.clear();
-      timePickerstart.value = "";
-      datePickerstart.value = "";
-      timePickerend.value = "";
-      datePickerend.value = "";
-      tripAmount.value = "";
-      document.getElementById("timePickerstart").disabled = true;
-      document.getElementById("datePickerstart").disabled = true;
-      document.getElementById("startTripButton").disabled = true;
-      document.getElementById("timePickerend").disabled = true;
-      document.getElementById("datePickerend").disabled = true;
-      document.getElementById("generateReportButton").disabled = true;
+
+      if (!tripData) {
+        console.error("No trip data available");
+        return;
+      }
+
+      try {
+        pickupadd = startingAddressName.name;
+        dropoffadd = endingAddressName.name;
+        dist = tripData.routeResults[0].route.attributes.Total_Kilometers.toFixed(2);
+        time = tripData.routeResults[0].route.attributes.Total_TravelTime.toFixed(2);
+        
+        book(pickupadd, dropoffadd, amount, dist, time);
+        
+        // Reset map and view
+        view.graphics.removeAll();
+        routeLayer.graphics.removeAll();
+        view.goTo({
+            target: view.center,
+            zoom: 2
+        });
+
+        // Reset form inputs
+        searchWidget.clear();
+        searchWidget2.clear();
+        timePickerstart.value = "";
+        datePickerstart.value = "";
+        timePickerend.value = "";
+        datePickerend.value = "";
+        tripAmount.value = "";
+
+        // Reset tracking
+        resetTracking();
+
+        // Reset route data
+        currentRoute = null;
+        lastKnownPosition = null;
+        routeLayer.removeAll();
+        routeParams.stops.features = [];
+        routeGeometry = null;
+        directions = null;
+
+        // Disable all buttons - Fixed the disabled variable issue
+        document.getElementById("timePickerstart").disabled = true;
+        document.getElementById("datePickerstart").disabled = true;
+        document.getElementById("startTripButton").disabled = true;
+        document.getElementById("timePickerend").disabled = true;
+        document.getElementById("datePickerend").disabled = true;
+        document.getElementById("generateReportButton").disabled = true;
+        document.getElementById("endTripButton").disabled = true;
+        document.getElementById("openWazeButton").disabled = true;
+
+      } catch (error) {
+          console.error("Error in endtripBookFunction:", error);
+          alert("Error ending trip. Please try again.");
+      }
+
     }
 
     document.getElementById('endTripButton').addEventListener('click', () => endtripBookFunction(tripData));
