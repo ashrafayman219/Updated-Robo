@@ -132,7 +132,7 @@ async function initializeRoboApp() {
     );
 
     displayMap = new Map({
-      basemap: "streets-dark-3d", //Basemap styles service
+      basemap: "arcgis-light-gray", //Basemap styles service
       // basemap: "arcgis/navigation", //Basemap styles service
       layers: [routeLayer],
     });
