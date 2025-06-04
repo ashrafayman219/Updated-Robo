@@ -79,8 +79,8 @@ async function initializeRoboApp() {
     //   "AAPKd7015c5bd40549d198ed7d592cc9f099sF9QSR2iGaKrU1mqQiqbldbvIDTUExU25VIJ0aLx4-8HCA0ph5T9hTJRvTI-J_DX"; // Will change it
 
     esriConfig.apiKey =
-      "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H";
-    let apiKey = "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H";
+      "AAPK2744c6af7d1644909db94ae6f1e74313mCLYD9GMQ8L18zALxFQpXGr9lSTYYL_YtRt4cF-7-VoeaZxxD43ZAZV3Gg0stckS";
+    let apiKey = "AAPK2744c6af7d1644909db94ae6f1e74313mCLYD9GMQ8L18zALxFQpXGr9lSTYYL_YtRt4cF-7-VoeaZxxD43ZAZV3Gg0stckS";
 
     const routeUrl =
       "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World";
@@ -88,7 +88,7 @@ async function initializeRoboApp() {
     const routeParams = new RouteParameters({
       // An authorization string used to access the routing service
       apiKey:
-        "AAPK756f006de03e44d28710cb446c8dedb4rkQyhmzX6upFiYPzQT0HNQNMJ5qPyO1TnPDSPXT4EAM_DlQSj20ShRD7vyKa7a1H",
+        "AAPK2744c6af7d1644909db94ae6f1e74313mCLYD9GMQ8L18zALxFQpXGr9lSTYYL_YtRt4cF-7-VoeaZxxD43ZAZV3Gg0stckS",
       stops: new FeatureSet(),
       outSpatialReference: {
         // autocasts as new SpatialReference()
@@ -190,26 +190,26 @@ async function initializeRoboApp() {
       console.log("endingAddressName: ", endingAddressName);
     });
 
-        // Event listeners for date and time pickers
-        timePickerstart.addEventListener('calciteInputChange', (event) => {
-          startTime = event.target.value;
-        });
-    
-        datePickerstart.addEventListener('calciteInputDatePickerChange', (event) => {
-          startDate = event.target.value;
-        });
-    
-        timePickerend.addEventListener('calciteInputChange', (event) => {
-          endTime = event.target.value;
-        });
-    
-        datePickerend.addEventListener('calciteInputDatePickerChange', (event) => {
-          endDate = event.target.value;
-        });
+    // Event listeners for date and time pickers
+    timePickerstart.addEventListener('calciteInputChange', (event) => {
+      startTime = event.target.value;
+    });
 
-        tripAmount.addEventListener('calciteInputChange', (event) => {
-          amount = event.target.value;
-        });
+    datePickerstart.addEventListener('calciteInputDatePickerChange', (event) => {
+      startDate = event.target.value;
+    });
+
+    timePickerend.addEventListener('calciteInputChange', (event) => {
+      endTime = event.target.value;
+    });
+
+    datePickerend.addEventListener('calciteInputDatePickerChange', (event) => {
+      endDate = event.target.value;
+    });
+
+    tripAmount.addEventListener('calciteInputChange', (event) => {
+      amount = event.target.value;
+    });
 
     async function startTrip(startingAddressName, endingAddressName) {
       console.log("Starting trip from:", startingAddressName, "to:", endingAddressName);
@@ -272,56 +272,68 @@ async function initializeRoboApp() {
 
 
 
+    // First, define the PictureMarkerSymbol for the taxi
+    const taxiSymbol = {
+      type: "picture-marker",  // autocasts as new PictureMarkerSymbol()
+      url: "./taxiPicture.png", // Replace with your taxi icon URL
+      width: "80px",
+      height: "80px"
+    };
 
     let trackWidget = new Track({
-      view: view
+      view: view,
+      graphic: new Graphic({
+        symbol: taxiSymbol // or taxiSymbolFont if using font icon
+      }),
+      goToLocationEnabled: true,
+      rotationEnabled: true
     });
-    
     view.ui.add(trackWidget, "top-left");
 
 
-// Conversion factor from miles to kilometers
-const MILES_TO_KILOMETERS = 1.60934;
 
-// Track the driver's position
-trackWidget.on("track", ({ position }) => {
-  const { longitude, latitude } = position.coords;
-  const currentPosition = new Point({ longitude, latitude, spatialReference: { wkid: 3857 } });
+    // Conversion factor from miles to kilometers
+    const MILES_TO_KILOMETERS = 1.60934;
 
-  // Find the closest direction segment to the current position
-  let closestSegmentIndex = -1;
-  let minDistance = Infinity;
+    // Track the driver's position
+    trackWidget.on("track", ({ position }) => {
+      const { longitude, latitude } = position.coords;
+      const currentPosition = new Point({ longitude, latitude, spatialReference: { wkid: 3857 } });
 
-  directions.features.forEach((direction, index) => {
-    const segmentGeometry = direction.geometry;
-    const distance = geometryEngine.distance(currentPosition, segmentGeometry, "kilometers");
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestSegmentIndex = index;
-    }
-  });
+      // Find the closest direction segment to the current position
+      let closestSegmentIndex = -1;
+      let minDistance = Infinity;
 
-  if (closestSegmentIndex !== -1) {
-    // Calculate remaining distance and time from the closest segment to the end
-    let remainingDistance = 0;
-    let remainingTime = 0;
+      directions.features.forEach((direction, index) => {
+        const segmentGeometry = direction.geometry;
+        const distance = geometryEngine.distance(currentPosition, segmentGeometry, "kilometers");
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestSegmentIndex = index;
+        }
+      });
 
-    for (let i = closestSegmentIndex; i < directions.features.length; i++) {
-      const direction = directions.features[i];
-      // Convert distance from miles to kilometers
-      remainingDistance += direction.attributes.length * MILES_TO_KILOMETERS;
-      remainingTime += direction.attributes.time;
-    }
+      if (closestSegmentIndex !== -1) {
+        // Calculate remaining distance and time from the closest segment to the end
+        let remainingDistance = 0;
+        let remainingTime = 0;
 
-    // Update UI
-    document.getElementById("remainingDistance").innerText = `Remaining Distance: ${remainingDistance.toFixed(2)} km`;
-    document.getElementById("remainingTime").innerText = `Remaining Time: ${remainingTime.toFixed(2)} minutes`;
-  } else {
-    // Handle case where no valid segment is found
-    document.getElementById("remainingDistance").innerText = `Remaining Distance: 0 km`;
-    document.getElementById("remainingTime").innerText = `Remaining Time: 0 minutes`;
-  }
-});
+        for (let i = closestSegmentIndex; i < directions.features.length; i++) {
+          const direction = directions.features[i];
+          // Convert distance from miles to kilometers
+          remainingDistance += direction.attributes.length * MILES_TO_KILOMETERS;
+          remainingTime += direction.attributes.time;
+        }
+
+        // Update UI
+        document.getElementById("remainingDistance").innerText = `Remaining Distance: ${remainingDistance.toFixed(2)} km`;
+        document.getElementById("remainingTime").innerText = `Remaining Time: ${remainingTime.toFixed(2)} minutes`;
+      } else {
+        // Handle case where no valid segment is found
+        document.getElementById("remainingDistance").innerText = `Remaining Distance: 0 km`;
+        document.getElementById("remainingTime").innerText = `Remaining Time: 0 minutes`;
+      }
+    });
 
 
 
@@ -492,13 +504,15 @@ async function addWidgets() {
   try {
     // await initializeMap();
 
-    const [BasemapGallery, Expand, ScaleBar, Search, Home, BasemapToggle] = await Promise.all([
+    const [BasemapGallery, Expand, ScaleBar, Search, Home, BasemapToggle, Compass, NavigationToggle] = await Promise.all([
       loadModule("esri/widgets/BasemapGallery"),
       loadModule("esri/widgets/Expand"),
       loadModule("esri/widgets/ScaleBar"),
       loadModule("esri/widgets/Search"),
       loadModule("esri/widgets/Home"),
       loadModule("esri/widgets/BasemapToggle"),
+      loadModule("esri/widgets/Compass"),
+      loadModule("esri/widgets/NavigationToggle"),
     ]);
 
     var basemapGallery = new BasemapGallery({
@@ -541,14 +555,30 @@ async function addWidgets() {
     });
     view.ui.add(homeWidget, "top-left");
 
-        // 1 - Create the widget
-        const toggle = new BasemapToggle({
-          // 2 - Set properties
-          view: view, // view that provides access to the map's 'topo-vector' basemap
-          nextBasemap: "hybrid", // allows for toggling to the 'hybrid' basemap
-        });
-        // Add widget to the top right corner of the view
-        view.ui.add(toggle, "top-left");
+    // // 1 - Create the widget
+    // const toggle = new BasemapToggle({
+    //   // 2 - Set properties
+    //   view: view, // view that provides access to the map's 'topo-vector' basemap
+    //   nextBasemap: "hybrid", // allows for toggling to the 'hybrid' basemap
+    // });
+    // // Add widget to the top right corner of the view
+    // view.ui.add(toggle, "top-left");
+
+
+    // Add this after creating your view
+    const compass = new Compass({
+      view: view
+    });
+    // Add the widgets to the view
+    view.ui.add(compass, "top-left");
+
+    // creates a new instance of the NavigationToggle widget
+    let navigationToggle = new NavigationToggle({
+      view: view
+    });
+    // and adds it to the top right of the view
+    view.ui.add(navigationToggle, "top-left");
+
 
     await view.when();
 
