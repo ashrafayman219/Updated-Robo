@@ -10,9 +10,6 @@ let endTime;
 let endDate;
 let amount;
 
-
-
-let trackWidget;
 let routeGeometry;
 let directions;
 
@@ -20,10 +17,8 @@ let directions;
 let isRoutingInProgress = false;
 let currentRoute = null;
 
-// Add these variables at the top
-let isTracking = false;
-let lastKnownPosition = null;
-let trackingInterval = null;
+
+
 
 function loadModule(moduleName) {
   return new Promise((resolve, reject) => {
@@ -39,37 +34,48 @@ function loadModule(moduleName) {
   });
 }
 
-
-// Navigation handling functions
-function openNavigation(lat, lon, app = 'waze') {
-    const navigationUrls = {
-        waze: {
-            mobile: `waze://?ll=${lat},${lon}&navigate=yes`,
-            desktop: `https://www.waze.com/ul?ll=${lat},${lon}&navigate=yes`
-        },
-        googleMaps: {
-            mobile: `comgooglemaps://?daddr=${lat},${lon}&directionsmode=driving`,
-            desktop: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
-        }
+// Function to save form data
+function saveFormData() {
+    const formData = {
+        startAddress: startingAddressName ? {
+            name: startingAddressName.name,
+            geometry: startingAddressName.feature.geometry.toJSON()
+        } : null,
+        endAddress: endingAddressName ? {
+            name: endingAddressName.name,
+            geometry: endingAddressName.feature.geometry.toJSON()
+        } : null,
+        startTime: timePickerstart.value,
+        startDate: datePickerstart.value,
+        endTime: timePickerend.value,
+        endDate: datePickerend.value,
+        tripAmount: tripAmount.value
     };
+    
+    localStorage.setItem('roboMapFormData', JSON.stringify(formData));
+}
 
+// Simplify the openNavigation function to only handle Waze
+function openNavigation(lat, lon) {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const url = isMobile ? navigationUrls[app].mobile : navigationUrls[app].desktop;
+    const wazeUrl = isMobile 
+        ? `waze://?ll=${lat},${lon}&navigate=yes`
+        : `https://www.waze.com/ul?ll=${lat},${lon}&navigate=yes`;
 
     // For mobile devices, try to open the app first
     if (isMobile) {
-        // Try to open the app
-        window.location.href = url;
+        window.location.href = wazeUrl;
         
         // Fallback to browser version after a short delay if app doesn't open
         setTimeout(() => {
-            window.location.href = navigationUrls[app].desktop;
+            window.location.href = `https://www.waze.com/ul?ll=${lat},${lon}&navigate=yes`;
         }, 1000);
     } else {
-        window.open(url, '_blank');
+        window.open(wazeUrl, '_blank');
     }
 }
 
+// Simplify the showNavigationModal function
 function showNavigationModal(lat, lon) {
     try {
         const modal = document.getElementById('wazeModal');
@@ -78,29 +84,16 @@ function showNavigationModal(lat, lon) {
             return;
         }
 
-        // Set up event listeners with error handling
         const wazeBtn = document.getElementById('openWazeBtn');
-        const googleBtn = document.getElementById('openGoogleMapsBtn');
         const cancelBtn = document.getElementById('cancelNavBtn');
 
         if (wazeBtn) {
             wazeBtn.onclick = () => {
                 try {
-                    openNavigation(lat, lon, 'waze');
+                    openNavigation(lat, lon);
                     modal.open = false;
                 } catch (error) {
                     console.error('Error opening Waze:', error);
-                }
-            };
-        }
-
-        if (googleBtn) {
-            googleBtn.onclick = () => {
-                try {
-                    openNavigation(lat, lon, 'googleMaps');
-                    modal.open = false;
-                } catch (error) {
-                    console.error('Error opening Google Maps:', error);
                 }
             };
         }
@@ -117,8 +110,8 @@ function showNavigationModal(lat, lon) {
         alert('Unable to open navigation options. Please try again.');
     }
 }
-// Add this function to handle navigation from report view
-function handleNavigationFromReport(app = 'waze') {
+// Simplify the handleNavigationFromReport function
+function handleNavigationFromReport() {
     if (!endingAddressName || !endingAddressName.feature) {
         console.error('No valid destination coordinates available');
         return;
@@ -126,119 +119,7 @@ function handleNavigationFromReport(app = 'waze') {
 
     const lat = endingAddressName.feature.geometry.latitude;
     const lon = endingAddressName.feature.geometry.longitude;
-    openNavigation(lat, lon, app);
-}
-
-
-
-// Enhanced tracking function
-function enhanceTracking() {
-    if (!trackWidget) return;
-
-    // Configure track widget
-    trackWidget.goToLocationEnabled = true;
-    trackWidget.scale = 1500; // Adjust zoom level when tracking
-    trackWidget.rotationEnabled = true;
-
-    trackWidget.on("track", ({ position }) => {
-        if (!position) return;
-
-        const { longitude, latitude } = position.coords;
-        lastKnownPosition = { longitude, latitude };
-
-        if (!isTracking) return;
-
-        // Update tracking information
-        updateTrackingInfo(position);
-    });
-
-    // Track start/stop handling
-    trackWidget.on("track-start", () => {
-        isTracking = true;
-        startContinuousTracking();
-    });
-
-    trackWidget.on("track-stop", () => {
-        isTracking = false;
-        stopContinuousTracking();
-    });
-}
-
-function startContinuousTracking() {
-    if (trackingInterval) return;
-
-    trackingInterval = setInterval(() => {
-        if (!lastKnownPosition || !routeGeometry) return;
-
-        const currentPoint = new Point({
-            longitude: lastKnownPosition.longitude,
-            latitude: lastKnownPosition.latitude,
-            spatialReference: view.spatialReference
-        });
-
-        // Calculate remaining distance and time
-        const remainingPath = calculateRemainingPath(currentPoint, routeGeometry);
-        updateRemainingInfo(remainingPath);
-    }, 5000); // Update every 5 seconds
-}
-
-function stopContinuousTracking() {
-    if (trackingInterval) {
-        clearInterval(trackingInterval);
-        trackingInterval = null;
-    }
-}
-
-function calculateRemainingPath(currentPoint, routePath) {
-    if (!geometryEngine) return null;
-
-    try {
-        const nearestVertex = geometryEngine.nearestVertex(routePath, currentPoint);
-        if (!nearestVertex) return null;
-
-        // Get the remaining portion of the route
-        const remainingGeometry = geometryEngine.cut(routePath, nearestVertex.coordinate)[1];
-        if (!remainingGeometry) return null;
-
-        return {
-            distance: geometryEngine.geodesicLength(remainingGeometry, "kilometers"),
-            geometry: remainingGeometry
-        };
-    } catch (error) {
-        console.error("Error calculating remaining path:", error);
-        return null;
-    }
-}
-
-function updateRemainingInfo(remainingPath) {
-    if (!remainingPath) return;
-
-    const remainingDistanceElement = document.getElementById("remainingDistance");
-    const remainingTimeElement = document.getElementById("remainingTime");
-
-    if (remainingDistanceElement) {
-        remainingDistanceElement.textContent = 
-            `Remaining Distance: ${remainingPath.distance.toFixed(2)} km`;
-    }
-
-    if (remainingTimeElement) {
-        // Estimate time based on average speed (e.g., 50 km/h)
-        const estimatedTimeHours = remainingPath.distance / 50;
-        const estimatedMinutes = Math.round(estimatedTimeHours * 60);
-        remainingTimeElement.textContent = 
-            `Estimated Time: ${estimatedMinutes} minutes`;
-    }
-}
-
-// Add this function to better handle tracking state
-function resetTracking() {
-    isTracking = false;
-    stopContinuousTracking();
-    if (trackWidget) {
-        trackWidget.stop();
-    }
-    document.getElementById("remainingDistance").textContent = "";
-    document.getElementById("remainingTime").textContent = "";
+    openNavigation(lat, lon);
 }
 
 
@@ -299,8 +180,9 @@ async function initializeRoboApp() {
 
     esriConfig.apiKey =
       "AAPK2744c6af7d1644909db94ae6f1e74313mCLYD9GMQ8L18zALxFQpXGr9lSTYYL_YtRt4cF-7-VoeaZxxD43ZAZV3Gg0stckS";
+  
     let apiKey = "AAPK2744c6af7d1644909db94ae6f1e74313mCLYD9GMQ8L18zALxFQpXGr9lSTYYL_YtRt4cF-7-VoeaZxxD43ZAZV3Gg0stckS";
-
+    
     const routeUrl =
       "https://route-api.arcgis.com/arcgis/rest/services/World/Route/NAServer/Route_World";
     const routeLayer = new GraphicsLayer();
@@ -313,8 +195,8 @@ async function initializeRoboApp() {
         // autocasts as new SpatialReference()
         wkid: 3857,
       },
-      // travelMode: "Driving Time"
     });
+
 
 
     const stopSymbol = {
@@ -348,11 +230,10 @@ async function initializeRoboApp() {
 
     displayMap = new Map({
       basemap: "arcgis-light-gray", //Basemap styles service
-      // basemap: "arcgis/navigation", //Basemap styles service
       layers: [routeLayer],
     });
 
-    view = new SceneView({
+    view = new MapView({
       container: "displayMap",
       map: displayMap,
       center: [4.46, 50.50],
@@ -375,13 +256,15 @@ async function initializeRoboApp() {
 
     searchWidget = new Search({
       view: view,
-      searchTerm: "THE HOTEL",
+      locationEnabled: true,
+      // searchTerm: "Add Starting Location",
       container: searchWidgetContainer,
       // allPlaceholder: "Enter addresswwwwwwwwwwwwwww or place"
     });
 
     searchWidget2 = new Search({
       view: view,
+      locationEnabled: true,
       // searchTerm: "THE HOTEL",
       container: searchWidgetContainer2,
       // allPlaceholder: "Enter addresswwwwwwwwwwwwwww or place"
@@ -395,7 +278,67 @@ async function initializeRoboApp() {
       document.getElementById("timePickerstart").disabled = false;
       document.getElementById("datePickerstart").disabled = false;
       console.log("startingAddressName: ", startingAddressName);
+
+      saveFormData();
     });
+
+
+function waitForInternalButton(callback) {
+  const interval = setInterval(() => {
+    const shadowRoot01 = document.getElementById("startTripButton")?.shadowRoot;
+    const shadowRoot02 = document.getElementById("generateReportButton")?.shadowRoot;
+    const shadowRoot03 = document.getElementById("endTripButton")?.shadowRoot;
+
+    const shadowRoot04 = document.getElementById("viewInvoiceButton")?.shadowRoot;
+    const shadowRoot05 = document.getElementById("startNewTripButton")?.shadowRoot;
+    const shadowRoot06 = document.getElementById("openWazeButton")?.shadowRoot;
+
+    const innerButton01 = shadowRoot01?.querySelector('button');
+    const innerButton02 = shadowRoot02?.querySelector('button');
+    const innerButton03 = shadowRoot03?.querySelector('button');
+
+    const innerButton04 = shadowRoot04?.querySelector('button');
+    const innerButton05 = shadowRoot05?.querySelector('button');
+    const innerButton06 = shadowRoot06?.querySelector('button');
+
+    if (innerButton01, innerButton02, innerButton03, innerButton04, innerButton05, innerButton06) {
+      clearInterval(interval);
+      callback(innerButton01, innerButton02, innerButton03, innerButton04, innerButton05, innerButton06);
+    }
+  }, 50);
+}
+
+waitForInternalButton((innerButton01, innerButton02, innerButton03, innerButton04, innerButton05, innerButton06) => {
+  innerButton01.style.borderRadius = '10px';
+  innerButton01.style.backgroundColor = '#103225';
+  innerButton01.style.color = '#f8fafc';
+
+  innerButton02.style.borderRadius = '10px';
+  innerButton02.style.backgroundColor = '#b7ed3b';
+  innerButton02.style.color = '#1b3f1b';
+
+  innerButton03.style.borderRadius = '10px';
+  innerButton03.style.backgroundColor = '#b7ed3b';
+  innerButton03.style.color = '#1b3f1b';
+
+  innerButton04.style.borderRadius = '10px';
+  innerButton04.style.backgroundColor = '#103225';
+  innerButton04.style.color = '#f8fafc';
+
+  innerButton05.style.borderRadius = '10px';
+  innerButton05.style.backgroundColor = '#103225';
+  innerButton05.style.color = '#f8fafc';
+
+  innerButton06.style.borderRadius = '10px';
+  innerButton06.style.backgroundColor = '#b7ed3b';
+  innerButton06.style.color = '#1b3f1b';
+
+  console.log("Modified internal button styles.");
+});
+
+
+
+
 
     searchWidget2.on("select-result", function (event) {
       console.log("The selected search result222222222: ", event.result);
@@ -409,38 +352,39 @@ async function initializeRoboApp() {
           handleNavigationFromReport('waze');
       });
 
-      // If you have a Google Maps button in your report view
-      document.getElementById('openGoogleMapsButton')?.addEventListener('click', () => {
-          handleNavigationFromReport('googleMaps');
-      });
-
-
-
       document.getElementById("startTripButton").disabled = false;
       document.getElementById("timePickerend").disabled = false;
       document.getElementById("datePickerend").disabled = false;
       console.log("endingAddressName: ", endingAddressName);
+      saveFormData();
     });
+
+
 
     // Event listeners for date and time pickers
     timePickerstart.addEventListener('calciteInputChange', (event) => {
       startTime = event.target.value;
+      saveFormData();
     });
 
     datePickerstart.addEventListener('calciteInputDatePickerChange', (event) => {
       startDate = event.target.value;
+      saveFormData();
     });
 
     timePickerend.addEventListener('calciteInputChange', (event) => {
       endTime = event.target.value;
+      saveFormData();
     });
 
     datePickerend.addEventListener('calciteInputDatePickerChange', (event) => {
       endDate = event.target.value;
+      saveFormData();
     });
 
     tripAmount.addEventListener('calciteInputChange', (event) => {
       amount = event.target.value;
+      saveFormData();
     });
 
     async function startTrip(startingAddressName, endingAddressName) {
@@ -588,46 +532,32 @@ async function initializeRoboApp() {
       // }
     }
 
-
-
-    // First, define the PictureMarkerSymbol for the taxi
-    const taxiSymbol = {
-      type: "picture-marker",  // autocasts as new PictureMarkerSymbol()
-      url: "./taxiPicture.png", // Replace with your taxi icon URL
-      width: "80px",
-      height: "80px"
-    };
-
-
-
-
-
-    const webStyleSymbol = new WebStyleSymbol({
+    
+        const webStyleSymbol = new WebStyleSymbol({
       name: "Tesla_P7",
       styleName: "EsriRealisticTransportationStyle"
     });
 
-    trackWidget = new Track({
+    let trackWidget = new Track({
       view: view,
-      graphic: new Graphic({
+            graphic: new Graphic({
         symbol: webStyleSymbol // or taxiSymbolFont if using font icon
       }),
-      goToLocationEnabled: true,
+            goToLocationEnabled: true,
       rotationEnabled: true
     });
+    
     view.ui.add(trackWidget, "top-left");
-
-    // Call this after initializing trackWidget
-    enhanceTracking();
 
     // Conversion factor from miles to kilometers
     const MILES_TO_KILOMETERS = 1.60934;
 
     // Track the driver's position
-    trackWidget.on("track", ({ position }) => {
+     trackWidget.on("track", ({ position }) => {
       const { longitude, latitude } = position.coords;
       const currentPosition = new Point({ longitude, latitude, spatialReference: { wkid: 3857 } });
-
+    
+       
       // Find the closest direction segment to the current position
       let closestSegmentIndex = -1;
       let minDistance = Infinity;
@@ -664,26 +594,67 @@ async function initializeRoboApp() {
     });
 
 
-
-    
     function generateReportData(tripData) {
-      if (!tripData) {
-        return 'No trip data available.';
-      }
+        if (!tripData) return 'No trip data available.';
+        
+        return `
+            <div class="report-title" style="font-weight: 700; color: #103225; font-size: 24px; margin-bottom: -8px;">
+                Trip Info
+            </div>
 
-      return `
-        <h3>Trip Report</h3>
-        <p>From: ${startingAddressName.name}</p>
-        <p>To: ${endingAddressName.name}</p>
-        <p>Start Date: ${startDate}</p>
-        <p>Start Time: ${startTime}</p>
-        <p>End Date: ${endDate}</p>
-        <p>End Time: ${endTime}</p>
-        <p>Trip amount: ${amount}</p>
-        <p>Distance: ${tripData.routeResults[0].route.attributes.Total_Kilometers.toFixed(2)} kilometers</p>
-        <p>Duration: ${tripData.routeResults[0].route.attributes.Total_TravelTime.toFixed(2)} minutes</p>
-      `;
+
+            <div class="info-block">
+                <strong>From:</strong>
+                <p>${startingAddressName.name}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>To:</strong>
+                <p>${endingAddressName.name}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>Start Date:</strong>
+                <p>${startDate}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>Start Time:</strong>
+                <p>${startTime}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>End Date:</strong>
+                <p>${endDate}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>End Time:</strong>
+                <p>${endTime}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>Trip Amount:</strong>
+                <p>${amount}</p>
+            </div>
+
+            <div class="info-block">
+                <strong>Distance:</strong>
+                <p>${tripData.routeResults[0].route.attributes.Total_Kilometers.toFixed(2)} kilometers
+
+                </p>
+            </div>
+
+            <div class="info-block">
+                <strong>Duration:</strong>
+                <p>${tripData.routeResults[0].route.attributes.Total_TravelTime.toFixed(2)} minutes
+                </p>
+            </div>
+        `;
     }
+    // <span class="remaining">(Remaining: ${remainingTime})</span>
+    // <span class="remaining">(Remaining: ${remainingDistance})</span>
+
 
     function sendInvoiceTrip(tripData) {
       // Get the current server's URL
@@ -697,13 +668,29 @@ async function initializeRoboApp() {
     }
 
     function showReport(tripData) {
+      // Hide the input container first
+      document.getElementById('inputContainer').classList.add('hidden01');
+
+
+      // Generate and set report content
       document.getElementById('reportContent').innerHTML = generateReportData(tripData);
-      document.getElementById('reportContainer').classList.remove('hidden');
+      
+      // Show report container with animation
+      const reportContainer = document.getElementById('reportContainer');
+      reportContainer.classList.remove('hidden');
+      // Give small delay for the animation to work
+      setTimeout(() => {
+          reportContainer.classList.add('visible');
+      }, 50);
     }
 
     function exitReport() {
+      const reportContainer = document.getElementById('reportContainer');
+      reportContainer.classList.add('hidden');
+      // Show the input button again
+      document.getElementById('showInputButton').classList.add('visible', 'pulsing');
+
       console.log("Exit button clicked");
-      document.getElementById('reportContainer').classList.add('hidden');
     }
 
     document.getElementById("startTripButton").addEventListener("click", async () => {
@@ -736,35 +723,44 @@ async function initializeRoboApp() {
         dist = tripData.routeResults[0].route.attributes.Total_Kilometers.toFixed(2);
         time = tripData.routeResults[0].route.attributes.Total_TravelTime.toFixed(2);
         
-        book(pickupadd, dropoffadd, amount, dist, time);
+	   book(pickupadd , 
+        dropoffadd , 
+        amount , 
+        dist , 
+        time,startDate,startTime);
         
         // Reset map and view
         view.graphics.removeAll();
         routeLayer.graphics.removeAll();
         view.goTo({
-            target: view.center,
-            zoom: 2
+          target: view.center,
+          zoom: 2
         });
 
         // Reset form inputs
-        searchWidget.clear();
-        searchWidget2.clear();
-        timePickerstart.value = "";
-        datePickerstart.value = "";
-        timePickerend.value = "";
-        datePickerend.value = "";
-        tripAmount.value = "";
+      searchWidget.clear();
+      searchWidget2.clear();
+      timePickerstart.value = "";
+      datePickerstart.value = "";
+      timePickerend.value = "";
+      datePickerend.value = "";
+      tripAmount.value = "";
 
-        // Reset tracking
-        resetTracking();
+          document.getElementById("remainingDistance").textContent = "";
+    document.getElementById("remainingTime").textContent = "";
 
         // Reset route data
         currentRoute = null;
-        lastKnownPosition = null;
-        routeLayer.removeAll();
+              routeLayer.removeAll();
         routeParams.stops.features = [];
         routeGeometry = null;
         directions = null;
+
+
+        // Clear saved form data
+        localStorage.removeItem('roboMapFormData');
+
+
 
         // Disable all buttons - Fixed the disabled variable issue
         document.getElementById("timePickerstart").disabled = true;
@@ -803,6 +799,7 @@ async function initializeRoboApp() {
       datePickerstart.value = "";
       timePickerend.value = "";
       datePickerend.value = "";
+      tripAmount.value = "";
       document.getElementById("timePickerstart").disabled = true;
       document.getElementById("datePickerstart").disabled = true;
       document.getElementById("timePickerend").disabled = true;
@@ -810,11 +807,94 @@ async function initializeRoboApp() {
       document.getElementById("startTripButton").disabled = true;
       document.getElementById("endTripButton").disabled = true;
       document.getElementById("generateReportButton").disabled = true;
+
+      document.getElementById('showInputButton').classList.add('visible', 'pulsing');
     });
 
 
     await view.when();
 
+    // Function to restore form data
+async function restoreFormData(Point) {
+    try {
+        const savedData = localStorage.getItem('roboMapFormData');
+        if (!savedData) return;
+
+        const formData = JSON.parse(savedData);
+
+        // Restore trip amount
+        if (formData.tripAmount) {
+            tripAmount.value = formData.tripAmount;
+            amount = formData.tripAmount;
+        }
+
+        // Restore dates and times
+        if (formData.startTime) {
+            timePickerstart.value = formData.startTime;
+            startTime = formData.startTime;
+            timePickerstart.disabled = false;
+        }
+
+        if (formData.startDate) {
+            datePickerstart.value = formData.startDate;
+            startDate = formData.startDate;
+            datePickerstart.disabled = false;
+        }
+
+        if (formData.endTime) {
+            timePickerend.value = formData.endTime;
+            endTime = formData.endTime;
+            timePickerend.disabled = false;
+        }
+
+        if (formData.endDate) {
+            datePickerend.value = formData.endDate;
+            endDate = formData.endDate;
+            datePickerend.disabled = false;
+        }
+
+        // Restore addresses
+        if (formData.startAddress) {
+            const startPoint = {
+                name: formData.startAddress.name,
+                feature: {
+                    geometry: new Point(formData.startAddress.geometry)
+                }
+            };
+            startingAddressName = startPoint;
+            searchWidget.searchTerm = formData.startAddress.name;
+            await searchWidget.search();
+        }
+
+        if (formData.endAddress) {
+            const endPoint = {
+                name: formData.endAddress.name,
+                feature: {
+                    geometry: new Point(formData.endAddress.geometry)
+                }
+            };
+            endingAddressName = endPoint;
+            searchWidget2.searchTerm = formData.endAddress.name;
+            await searchWidget2.search();
+
+            // Enable start trip button if both addresses are present
+            if (startingAddressName) {
+                document.getElementById("startTripButton").disabled = false;
+            }
+        }
+
+        // If both addresses are present, recalculate the route
+        if (startingAddressName && endingAddressName) {
+            await startTrip(startingAddressName, endingAddressName);
+        }
+    } catch (error) {
+        console.error('Error restoring form data:', error);
+    }
+}
+
+
+    // Restore saved form data
+    await restoreFormData(Point);
 
 
 
@@ -861,15 +941,13 @@ async function addWidgets() {
   try {
     // await initializeMap();
 
-    const [BasemapGallery, Expand, ScaleBar, Search, Home, BasemapToggle, Compass, NavigationToggle] = await Promise.all([
+    const [BasemapGallery, Expand, ScaleBar, Search, Home, BasemapToggle] = await Promise.all([
       loadModule("esri/widgets/BasemapGallery"),
       loadModule("esri/widgets/Expand"),
       loadModule("esri/widgets/ScaleBar"),
       loadModule("esri/widgets/Search"),
       loadModule("esri/widgets/Home"),
       loadModule("esri/widgets/BasemapToggle"),
-      loadModule("esri/widgets/Compass"),
-      loadModule("esri/widgets/NavigationToggle"),
     ]);
 
     var basemapGallery = new BasemapGallery({
@@ -912,30 +990,14 @@ async function addWidgets() {
     });
     view.ui.add(homeWidget, "top-left");
 
-    // // 1 - Create the widget
-    // const toggle = new BasemapToggle({
-    //   // 2 - Set properties
-    //   view: view, // view that provides access to the map's 'topo-vector' basemap
-    //   nextBasemap: "hybrid", // allows for toggling to the 'hybrid' basemap
-    // });
-    // // Add widget to the top right corner of the view
-    // view.ui.add(toggle, "top-left");
-
-
-    // // Add this after creating your view
-    // const compass = new Compass({
-    //   view: view
-    // });
-    // // Add the widgets to the view
-    // view.ui.add(compass, "top-left");
-
-    // // creates a new instance of the NavigationToggle widget
-    // let navigationToggle = new NavigationToggle({
-    //   view: view
-    // });
-    // // and adds it to the top right of the view
-    // view.ui.add(navigationToggle, "top-left");
-
+        // // 1 - Create the widget
+        // const toggle = new BasemapToggle({
+        //   // 2 - Set properties
+        //   view: view, // view that provides access to the map's 'topo-vector' basemap
+        //   nextBasemap: "hybrid", // allows for toggling to the 'hybrid' basemap
+        // });
+        // // Add widget to the top right corner of the view
+        // view.ui.add(toggle, "top-left");
 
     await view.when();
 

@@ -8,7 +8,7 @@
 
   <script type="module" src="https://js.arcgis.com/calcite-components/2.10.1/calcite.esm.js"></script>
   <link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/2.10.1/calcite.css" />
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style01.css">
   <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
   <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4="
     crossorigin="anonymous"></script>
@@ -17,9 +17,10 @@
 
 <body>
 
-  <div id="titleDiv" class="esri-widget">
-    <div id="title">ROBO App</div>
-  </div>
+  <header class="app-header">
+    <img src="https://raw.githubusercontent.com/ashrafayman219/Updated-Robo/refs/heads/main/robologo.png" alt="Logo" class="header-logo">
+  </header>
+
   <div id="displayMap"></div>
 
   <!-- Button to show the inputContainer when hidden -->
@@ -42,7 +43,7 @@
       <label for="timePickerstart">Choose your starting date & time</label>
       <!-- <calcite-input-time-picker disabled id="timePickerstart"></calcite-input-time-picker> -->
       <calcite-input disabled id="timePickerstart" placeholder="Enter your region" type="time"
-        prefix-text="Pick your time"></calcite-input>
+        prefix-text="Select Time"></calcite-input>
       <calcite-input-date-picker disabled id="datePickerstart"></calcite-input-date-picker>
     </section>
     <section>
@@ -53,7 +54,7 @@
       <label for="timePickerend">Choose your arriving date & time</label>
       <!-- <calcite-input-time-picker disabled id="timePickerend"></calcite-input-time-picker> -->
       <calcite-input disabled id="timePickerend" placeholder="Enter your region" type="time"
-        prefix-text="Pick your time"></calcite-input>
+        prefix-text="Select Time"></calcite-input>
       <calcite-input-date-picker disabled id="datePickerend"></calcite-input-date-picker>
     </section>
     <section>
@@ -61,9 +62,9 @@
       <calcite-input id="tripAmount" placeholder="Enter trip amount"></calcite-input>
     </section>
 
-    <calcite-button disabled id="startTripButton" appearance="solid">Start trip</calcite-button>
-    <calcite-button disabled id="generateReportButton" appearance="solid">View trip info</calcite-button>
-    <calcite-button disabled id="endTripButton" appearance="solid">End trip</calcite-button>
+    <calcite-button scale="l" disabled id="startTripButton" appearance="solid">Start trip</calcite-button>
+    <calcite-button scale="l" disabled id="generateReportButton" appearance="solid">View trip info</calcite-button>
+    <calcite-button scale="l" disabled id="endTripButton" appearance="solid">End trip</calcite-button>
   </div>
 
   <div id="reportContainer" class="hidden">
@@ -72,19 +73,20 @@
         <!-- Report content will be dynamically filled here -->
       </div>
       <div id="reportActions">
-        <calcite-button id="viewInvoiceButton" appearance="solid">View invoice</calcite-button>
-        <calcite-button id="startNewTripButton" appearance="solid">Start new trip</calcite-button>
-        <calcite-button id="exitReportButton" appearance="solid">Exit</calcite-button>
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <calcite-button id="openWazeButton" appearance="solid">
-            <calcite-icon scale="s" slot="start" icon="navigation"></calcite-icon>
+        <calcite-button scale="l" id="viewInvoiceButton" appearance="solid">View invoice</calcite-button>
+        <calcite-button scale="l" id="startNewTripButton" appearance="solid">Start new trip</calcite-button>
+
+        <!-- <div style="display: flex; gap: 10px; margin-top: 10px;"> -->
+          <calcite-button icon-end="driving-time" scale="l" id="openWazeButton" appearance="solid">
+            <calcite-icon scale="ls" slot="start" icon="navigation"></calcite-icon>
             Open in Waze
           </calcite-button>
-          <calcite-button id="openGoogleMapsButton" appearance="solid">
+          <button type="button" id="exitReportButton" appearance="solid"></button>
+          <!-- <calcite-button id="openGoogleMapsButton" appearance="solid">
             <calcite-icon scale="s" slot="start" icon="map"></calcite-icon>
             Open in Google Maps
-          </calcite-button>
-        </div>
+          </calcite-button> -->
+        <!-- </div> -->
       </div>
     </section>
   </div>
@@ -197,10 +199,10 @@ document.addEventListener("DOMContentLoaded", function () {
         <calcite-icon scale="s" slot="start" icon="navigation"></calcite-icon>
         Open in Waze
       </calcite-button>
-      <calcite-button width="full" id="openGoogleMapsBtn" appearance="solid" style="margin-top: 10px;">
+      <!-- <calcite-button width="full" id="openGoogleMapsBtn" appearance="solid" style="margin-top: 10px;">
         <calcite-icon scale="s" slot="start" icon="map"></calcite-icon>
         Open in Google Maps
-      </calcite-button>
+      </calcite-button> -->
     </div>
     <calcite-button slot="secondary" width="full" id="cancelNavBtn" appearance="outline">
       Cancel
@@ -208,7 +210,7 @@ document.addEventListener("DOMContentLoaded", function () {
   </calcite-modal>
 
 
-  <script src="script.js"></script>
+  <script src="script01.js"></script>
 </body>
 
 </html>
